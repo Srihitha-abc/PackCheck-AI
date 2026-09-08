@@ -1,0 +1,13 @@
+import { Router } from 'express';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import { body, validationResult } from 'express-validator';
+import User from '../models/User.js';
+import { protect } from '../middleware/auth.js';
+const router = Router();
+const tokenFor = user => jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '8h' });
+const publicUser = user => ({ id: user._id, name: user.name, email: user.email, role: user.role });
+router.post('/register', [body('name').trim().notEmpty(), body('email').isEmail(), body('password').isLength({ min: 8 })], async (req, res, next) => { try { const errors = validationResult(req); if (!errors.isEmpty()) return res.status(422).json({ message: 'Please provide a valid name, email, and 8-character password' }); const exists = await User.findOne({ email: req.body.email }); if (exists) return res.status(409).json({ message: 'Email is already registered' }); const user = await User.create({ name: req.body.name, email: req.body.email, password: await bcrypt.hash(req.body.password, 12), role: 'INSPECTOR' }); res.status(201).json({ token: tokenFor(user), user: publicUser(user) }); } catch (error) { next(error); } });
+router.post('/login', async (req, res, next) => { try { const user = await User.findOne({ email: req.body.email }).select('+password'); if (!user || !(await bcrypt.compare(req.body.password || '', user.password))) return res.status(401).json({ message: 'Invalid email or password' }); res.json({ token: tokenFor(user), user: publicUser(user) }); } catch (error) { next(error); } });
+router.get('/me', protect, (req, res) => res.json({ user: publicUser(req.user) }));
+export default router;

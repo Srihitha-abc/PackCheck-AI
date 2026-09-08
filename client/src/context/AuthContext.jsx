@@ -1,0 +1,5 @@
+import { createContext, useContext, useEffect, useState } from 'react';
+import api from '../services/api';
+const AuthContext = createContext(null);
+export function AuthProvider({ children }) { const [user, setUser] = useState(() => JSON.parse(localStorage.getItem('packcheck_user') || 'null')); const [loading, setLoading] = useState(false); const login = async (credentials) => { setLoading(true); try { const { data } = await api.post('/auth/login', credentials); localStorage.setItem('packcheck_token', data.token); localStorage.setItem('packcheck_user', JSON.stringify(data.user)); setUser(data.user); } finally { setLoading(false); } }; const logout = () => { localStorage.removeItem('packcheck_token'); localStorage.removeItem('packcheck_user'); setUser(null); }; useEffect(() => { if (localStorage.getItem('packcheck_token')) api.get('/auth/me').catch(logout); }, []); return <AuthContext.Provider value={{ user, loading, login, logout }}>{children}</AuthContext.Provider>; }
+export const useAuth = () => useContext(AuthContext);

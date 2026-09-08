@@ -1,0 +1,7 @@
+import { Router } from 'express';
+import { protect } from '../middleware/auth.js';
+import Inspection from '../models/Inspection.js';
+const router = Router();
+router.get('/dashboard', protect, async (req, res, next) => { try { const filter = req.user.role === 'INSPECTOR' ? { inspector: req.user._id } : {}; const [total, compliant, review, violations, recent] = await Promise.all([Inspection.countDocuments(filter), Inspection.countDocuments({ ...filter, status: 'COMPLIANT' }), Inspection.countDocuments({ ...filter, status: 'REQUIRES REVIEW' }), Inspection.aggregate([{ $match: filter }, { $unwind: '$violations' }, { $count: 'count' }]), Inspection.find(filter).populate('product', 'name brand').sort('-createdAt').limit(6)]); res.json({ total, compliant, review, violationCount: violations[0]?.count || 0, complianceRate: total ? Math.round((compliant / total) * 100) : 0, recent }); } catch (e) { next(e); } });
+router.get('/trends', protect, async (req, res, next) => { try { const data = await Inspection.aggregate([{ $group: { _id: { month: { $month: '$createdAt' } }, inspections: { $sum: 1 }, compliant: { $sum: { $cond: [{ $eq: ['$status', 'COMPLIANT'] }, 1, 0] } } } }, { $sort: { '_id.month': 1 } }]); res.json({ trends: data.map(item => ({ month: String(item._id.month), inspections: item.inspections, compliant: item.compliant })) }); } catch (e) { next(e); } });
+export default router;
